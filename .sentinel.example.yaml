@@ -1,0 +1,14 @@
+# Sentinel Configuration
+# Copy this to .sentinel.yaml in your project root or home directory
+
+# Markers to scan for (default: TODO, FIXME, BUG, HACK)
+markers:
+  - TODO
+  - FIXME
+  - BUG
+  - HACK
+  - NOTE
+  - XXX
+
+# Default repository path (default: current directory)
+repo_path: .

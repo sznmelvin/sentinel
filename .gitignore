@@ -18,9 +18,11 @@ sentinel.exe
 Thumbs.db
 
 # Config with tokens — never commit this
+.env
 .sentinel.yaml
 *.token
 sentinel.local.yaml
+.sentinel_cache.json
 
 # Test coverage
 coverage.out

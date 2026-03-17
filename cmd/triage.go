@@ -3,22 +3,40 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/spf13/cobra"
+	"github.com/sznmelvin/sentinel/config"
 )
 
-// Configurable markers to look for
-var markers = []string{"TODO", "FIXME", "BUG", "HACK"}
+var markers []string
 
 var triageCmd = &cobra.Command{
 	Use:   "triage",
 	Short: "Scan local codebase for action items (TODOs, FIXMEs)",
 	Run: func(cmd *cobra.Command, args []string) {
+		config.LoadEnv()
+		
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
+		}
+		
+		markers = []string{"TODO", "FIXME", "BUG", "HACK"}
+		if cfg != nil && len(cfg.Markers) > 0 {
+			markers = cfg.Markers
+		}
+
+		repoPathToUse := repoPath
+		if repoPathToUse == "" && cfg != nil {
+			repoPathToUse = cfg.RepoPath
+		}
+		
 		// 1. Open Repository
-		r, err := git.PlainOpen(repoPath)
+		r, err := git.PlainOpen(repoPathToUse)
 		if err != nil {
 			fmt.Printf("Error opening repo at %s: %v\n", repoPath, err)
 			return

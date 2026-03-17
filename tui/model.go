@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/sznmelvin/sentinel/config"
 )
 
 // --- CONFIG ---
@@ -27,7 +28,6 @@ const (
 
 var (
 	bufPool = sync.Pool{New: func() interface{} { return make([]byte, 32*1024) }}
-	markers = [][]byte{[]byte("TODO"), []byte("FIXME"), []byte("BUG"), []byte("HACK")}
 )
 
 // --- STYLES ---
@@ -105,18 +105,32 @@ type Model struct {
 	ProgressScanned int
 	ProgressTotal   int
 	ProgressMsg    string
+	
+	// Config
+	Markers []string
 }
 
-func InitialModel(path string) Model {
+func InitialModel(path string, cfg *config.Config) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Filter..."
 	ti.CharLimit = 156
 	ti.Width = 30
 
+	markers := []string{"TODO", "FIXME", "BUG", "HACK"}
+	if cfg != nil && len(cfg.Markers) > 0 {
+		markers = cfg.Markers
+	}
+	
+	githubToken := os.Getenv("GITHUB_TOKEN")
+	if cfg != nil && cfg.GithubToken != "" {
+		githubToken = cfg.GithubToken
+	}
+
 	return Model{
 		State:       StateOverview,
 		RepoPath:    path,
 		SearchInput: ti,
+		Markers:     markers,
 	}
 }
 
@@ -131,7 +145,116 @@ type ProgressMsg struct {
 type ErrMsg error
 
 // 1. Load Local Data
-func getRepoInfo(path string) tea.Cmd {
+func getRepoInfo(path string, markers []string) tea.Cmd {
+	markerBytes := make([][]byte, len(markers))
+	for i, m := range markers {
+		markerBytes[i] = []byte(m)
+	}
+	
+	return func() tea.Msg {
+		r, err := git.PlainOpen(path)
+		if err != nil { return ErrMsg(err) }
+
+		info := RepoInfo{Path: path, Todos: make([]TodoItem, 0)}
+
+		// Git Metadata
+		ref, _ := r.Head()
+		if ref != nil {
+			info.Branch = ref.Name().Short()
+			info.CommitHash = ref.Hash().String()[:7]
+			
+			list, _ := r.Remotes()
+			if len(list) > 0 {
+				urls := list[0].Config().URLs
+				if len(urls) > 0 {
+					parts := strings.Split(strings.TrimSuffix(urls[0], ".git"), "/")
+					if len(parts) >= 2 {
+						info.RepoName = parts[len(parts)-1]
+						info.Owner = parts[len(parts)-2]
+					}
+				}
+			}
+		}
+
+		// Load Cache
+		if data, err := os.ReadFile(cacheFile); err == nil {
+			var cached []Issue
+			if json.Unmarshal(data, &cached) == nil {
+				info.Issues = cached
+			}
+		}
+
+		// Scan TODOs
+		if ref != nil {
+			c, _ := r.CommitObject(ref.Hash())
+			tree, _ := c.Tree()
+			
+			numWorkers := runtime.NumCPU()
+			fileChan := make(chan *object.File, numWorkers*2)
+			resultChan := make(chan []TodoItem, numWorkers)
+			var wg sync.WaitGroup
+
+			for i := 0; i < numWorkers; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					var local []TodoItem
+					bufPtr := bufPool.Get().([]byte)
+					defer bufPool.Put(bufPtr)
+
+					for f := range fileChan {
+						if isIgnored(f.Name) { continue }
+						
+						reader, err := f.Reader()
+						if err != nil { continue }
+						
+						header := make([]byte, 512)
+						n, _ := reader.Read(header)
+						if bytes.IndexByte(header[:n], 0) != -1 { reader.Close(); continue }
+						reader.Close()
+
+						reader, _ = f.Reader()
+						scanner := bufio.NewScanner(reader)
+						scanner.Buffer(bufPtr, len(bufPtr))
+						
+						lineNum := 0
+						for scanner.Scan() {
+							lineNum++
+							lineBytes := scanner.Bytes()
+							for _, mrk := range markerBytes {
+								if bytes.Contains(lineBytes, mrk) {
+									txt := strings.TrimSpace(string(lineBytes))
+									if len(txt) > 80 { txt = txt[:80] + "..." }
+									local = append(local, TodoItem{f.Name, lineNum, txt})
+									break
+								}
+							}
+							if len(local) > maxListItems/numWorkers { break }
+						}
+						reader.Close()
+					}
+					resultChan <- local
+				}()
+			}
+			go func() {
+				_ = tree.Files().ForEach(func(f *object.File) error { 
+					if !isIgnored(f.Name) { fileChan <- f } 
+					return nil 
+				})
+				close(fileChan)
+			}()
+			wg.Wait()
+			close(resultChan)
+			for res := range resultChan { info.Todos = append(info.Todos, res...) }
+		}
+
+		w, _ := r.Worktree()
+		if w != nil { s, _ := w.Status(); info.Clean = s.IsClean() }
+
+		return RepoMsg(info)
+	}
+}
+	
 	return func() tea.Msg {
 		r, err := git.PlainOpen(path)
 		if err != nil { return ErrMsg(err) }
@@ -272,7 +395,7 @@ func isIgnored(path string) bool {
 
 // --- INIT ---
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tea.EnterAltScreen, getRepoInfo(m.RepoPath))
+	return tea.Batch(tea.EnterAltScreen, getRepoInfo(m.RepoPath, m.Markers))
 }
 
 // --- UPDATE ---
