@@ -100,6 +100,11 @@ type Model struct {
 	// Dynamic filtered lists
 	FilteredTodos  []TodoItem
 	FilteredIssues []Issue
+
+	// Progress tracking
+	ProgressScanned int
+	ProgressTotal   int
+	ProgressMsg    string
 }
 
 func InitialModel(path string) Model {
@@ -119,6 +124,10 @@ func InitialModel(path string) Model {
 
 type RepoMsg RepoInfo
 type SyncMsg []Issue
+type ProgressMsg struct {
+	Scanned int
+	Total   int
+}
 type ErrMsg error
 
 // 1. Load Local Data
@@ -176,7 +185,6 @@ func getRepoInfo(path string) tea.Cmd {
 
 					for f := range fileChan {
 						if isIgnored(f.Name) { continue }
-						
 						reader, err := f.Reader()
 						if err != nil { continue }
 						
@@ -209,7 +217,10 @@ func getRepoInfo(path string) tea.Cmd {
 				}()
 			}
 			go func() {
-				_ = tree.Files().ForEach(func(f *object.File) error { fileChan <- f; return nil })
+				_ = tree.Files().ForEach(func(f *object.File) error { 
+					if !isIgnored(f.Name) { fileChan <- f } 
+					return nil 
+				})
 				close(fileChan)
 			}()
 			wg.Wait()
@@ -320,6 +331,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateFilteredLists()
 		m.Syncing = false
 
+	case ProgressMsg:
+		m.ProgressScanned = msg.Scanned
+		m.ProgressTotal = msg.Total
+		m.ProgressMsg = fmt.Sprintf("Scanning: %d/%d files", msg.Scanned, msg.Total)
+
 	case ErrMsg:
 		m.Err = msg
 		m.Syncing = false
@@ -338,6 +354,16 @@ func (m *Model) moveListCursor(delta int) {
 		if m.State < 0 { m.State = StateOverview }
 		if m.State > StateTODOs { m.State = StateTODOs }
 		m.SidebarIdx = int(m.State)
+		m.ListScroll = 0
+		return
+	}
+
+	if listLen == 0 {
+		m.State = SessionState(int(m.State) + delta)
+		if m.State < 0 { m.State = StateOverview }
+		if m.State > StateTODOs { m.State = StateTODOs }
+		m.SidebarIdx = int(m.State)
+		m.ListScroll = 0
 		return
 	}
 
@@ -345,11 +371,17 @@ func (m *Model) moveListCursor(delta int) {
 	if delta < 0 && target < 0 {
 		m.State--
 		m.SidebarIdx = int(m.State)
+		m.ListScroll = 0
 		return
 	}
-	if target >= 0 && target < listLen {
-		m.ListScroll = target
+	if target >= listLen {
+		m.State++
+		if m.State > StateTODOs { m.State = StateTODOs }
+		m.SidebarIdx = int(m.State)
+		m.ListScroll = 0
+		return
 	}
+	m.ListScroll = target
 }
 
 func (m *Model) updateFilteredLists() {
@@ -379,7 +411,13 @@ func (m *Model) updateFilteredLists() {
 
 func (m Model) View() string {
 	if m.Err != nil { return fmt.Sprintf("Error: %v", m.Err) }
-	if !m.Loaded { return fmt.Sprintf("\n  Loading... (Using %d threads)", runtime.NumCPU()) }
+	if !m.Loaded { 
+		loading := fmt.Sprintf("\n  Loading... (Using %d threads)", runtime.NumCPU())
+		if m.ProgressMsg != "" {
+			loading = "\n  " + m.ProgressMsg
+		}
+		return loading
+	}
 
 	var sb strings.Builder
 	
