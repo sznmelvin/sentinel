@@ -1,0 +1,27 @@
+# Binaries
+sentinel
+sentinel.exe
+/dist/
+
+# Go build cache
+*.test
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config with tokens — never commit this
+.sentinel.yaml
+*.token
+sentinel.local.yaml
+
+# Test coverage
+coverage.out
+coverage.html
