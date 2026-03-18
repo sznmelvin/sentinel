@@ -9,9 +9,9 @@ import (
 )
 
 type Config struct {
-	Markers   []string `yaml:"markers"`
-	RepoPath  string   `yaml:"repo_path"`
-	GithubToken string `yaml:"-"`
+	Markers    []string `yaml:"markers"`
+	RepoPath   string   `yaml:"repo_path"`
+	GithubToken string   `yaml:"-"`
 }
 
 var DefaultConfig = Config{
