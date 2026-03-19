@@ -16,6 +16,12 @@ A TUI (Terminal User Interface) tool for open source maintainers to scan code fo
 go install github.com/sznmelvin/sentinel@latest
 ```
 
+Or install a specific version:
+
+```bash
+go install github.com/sznmelvin/sentinel@v1.0.2
+```
+
 ## Quick Start
 
 ```bash
