@@ -121,11 +121,6 @@ func InitialModel(path string, cfg *config.Config) Model {
 		markers = cfg.Markers
 	}
 	
-	githubToken := os.Getenv("GITHUB_TOKEN")
-	if cfg != nil && cfg.GithubToken != "" {
-		githubToken = cfg.GithubToken
-	}
-
 	return Model{
 		State:       StateOverview,
 		RepoPath:    path,
