@@ -1,0 +1,60 @@
+# This is the configuration for GoReleaser.
+# Full documentation: https://goreleaser.com
+
+project_name: sentinel
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: sentinel
+    main: ./main.go
+    binary: sentinel
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/sznmelvin/sentinel/cmd.Version={{.Version}}
+      - -X github.com/sznmelvin/sentinel/cmd.Commit={{.Commit}}
+      - -X github.com/sznmelvin/sentinel/cmd.Date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - .sentinel.example.yaml
+
+checksum:
+  id: default
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: sznmelvin
+    name: sentinel
+  draft: false
+  prerelease: auto

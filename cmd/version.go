@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	Version   = "dev"
-	CommitSHA = "none"
-	BuildDate = "unknown"
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
 )
 
 var versionCmd = &cobra.Command{
@@ -17,7 +17,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print Sentinel version information",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("sentinel %s (commit: %s, built: %s)\n",
-			Version, CommitSHA, BuildDate)
+			Version, Commit, Date)
 	},
 }
 

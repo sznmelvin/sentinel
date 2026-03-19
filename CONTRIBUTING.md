@@ -29,17 +29,22 @@ Thank you for your interest in contributing to Sentinel!
    make build
    ```
 
+5. **Install locally** (optional)
+   ```bash
+   go install .
+   # Ensure ~/go/bin is in your PATH
+   ```
+
 ## Project Structure
 
 ```
 sentinel/
 ├── cmd/            # CLI commands (root, triage, version)
-├── internal/       # Internal packages
-│   ├── config/     # Configuration loading
-│   └── models/     # Data models
+├── config/         # Configuration loading
 ├── tui/            # Terminal UI (Bubble Tea)
 ├── .env.example    # Example environment variables
 ├── Makefile        # Build commands
+├── .goreleaser.yaml # Release configuration
 └── README.md       # Project documentation
 ```
 
@@ -54,7 +59,7 @@ sentinel/
 
 1. **For CLI commands**: Add to `cmd/` directory
 2. **For TUI features**: Add to `tui/` directory
-3. **For configuration**: Update `internal/config/config.go`
+3. **For configuration**: Update `config/config.go`
 
 ## Testing
 
@@ -62,6 +67,44 @@ Run tests with:
 ```bash
 go test -v ./...
 ```
+
+## Creating Releases
+
+This project uses GoReleaser for automated releases.
+
+1. **Install GoReleaser**
+   ```bash
+   go install github.com/goreleaser/goreleaser@latest
+   ```
+
+2. **Create a GitHub Token**
+   - Go to https://github.com/settings/tokens
+   - Generate a classic token with `repo` scope
+
+3. **Set the token**
+   ```bash
+   export GITHUB_TOKEN=your_token_here
+   ```
+
+4. **Dry run (test)**
+   ```bash
+   goreleaser --clean --snapshot --skip-publish
+   ```
+
+5. **Create a release**
+   ```bash
+   # Tag a version
+   git tag -a v1.0.0 -m "Release v1.0.0"
+   git push origin v1.0.0
+
+   # Run GoReleaser
+   goreleaser --clean
+   ```
+
+GoReleaser will automatically create:
+- Tagged GitHub release
+- Binary archives for Linux, macOS, Windows
+- SHA256 checksums
 
 ## Submitting a Pull Request
 

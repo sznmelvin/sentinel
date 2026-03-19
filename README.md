@@ -12,14 +12,30 @@ A TUI (Terminal User Interface) tool for open source maintainers to scan code fo
 
 ## Installation
 
+### Download Binary (Recommended)
+
+Download the latest release for your platform from the [Releases page](https://github.com/sznmelvin/sentinel/releases/latest):
+
+```bash
+# Linux
+curl -L https://github.com/sznmelvin/sentinel/releases/latest/download/sentinel-linux-amd64.tar.gz | tar xz
+sudo mv sentinel /usr/local/bin/
+
+# macOS
+curl -L https://github.com/sznmelvin/sentinel/releases/latest/download/sentinel-darwin-amd64.tar.gz | tar xz
+sudo mv sentinel /usr/local/bin/
+```
+
+### Using Go
+
 ```bash
 go install github.com/sznmelvin/sentinel@latest
 ```
 
-Or install a specific version:
+**Note:** If using `go install`, ensure `$GOPATH/bin` is in your PATH. Add this to your shell config (~/.bashrc, ~/.zshrc, etc.):
 
 ```bash
-go install github.com/sznmelvin/sentinel@v1.0.2
+export PATH=$(go env GOPATH)/bin:$PATH
 ```
 
 ## Quick Start
