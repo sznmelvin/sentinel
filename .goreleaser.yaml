@@ -38,7 +38,6 @@ archives:
       - .sentinel.example.yaml
 
 checksum:
-  id: default
   algorithm: sha256
 
 snapshot:
