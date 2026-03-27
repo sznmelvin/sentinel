@@ -30,20 +30,36 @@ var (
 	bufPool = sync.Pool{New: func() interface{} { return make([]byte, 32*1024) }}
 )
 
-// --- STYLES ---
+// --- STYLES (THE HACKER REVAMP) ---
 var (
-	subtle    = lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}
-	highlight = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
-	special   = lipgloss.AdaptiveColor{Light: "#43BF6D", Dark: "#73F59F"}
-	text      = lipgloss.AdaptiveColor{Light: "#333333", Dark: "#DDDDDD"}
+	bloodRed  = lipgloss.Color("#FF0000")
+	darkRed   = lipgloss.Color("#8B0000")
+	dimText   = lipgloss.Color("#777777")
+	whiteText = lipgloss.Color("#FFFFFF")
 
-	titleRendered = lipgloss.NewStyle().Foreground(special).Bold(true).Padding(0, 1).Background(subtle).Render
+	titleRendered = lipgloss.NewStyle().Foreground(bloodRed).Bold(true).Render
 	docStyle      = lipgloss.NewStyle().Margin(1, 2)
-	sidebarStyle  = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(highlight).Padding(0, 1).MarginRight(1).Width(25)
-	mainStyle     = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(subtle).Padding(0, 1)
-	itemStyle     = lipgloss.NewStyle().PaddingLeft(2).Foreground(text)
-	selectedStyle = lipgloss.NewStyle().PaddingLeft(0).Foreground(highlight).SetString("│ ")
+	
+	// Sharp, angular borders replacing the rounded ones
+	sidebarStyle  = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(darkRed).Padding(0, 1).MarginRight(1).Width(30)
+	mainStyle     = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(darkRed).Padding(0, 1)
+	
+	// List items
+	itemStyle     = lipgloss.NewStyle().PaddingLeft(2).Foreground(dimText)
+	selectedStyle = lipgloss.NewStyle().PaddingLeft(0).Foreground(bloodRed).Bold(true).SetString("► ")
+	
+	// Terminal output style
+	bracketStyle  = lipgloss.NewStyle().Foreground(darkRed)
 )
+
+const sentinelAscii = `
+ ███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗
+ ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║
+ ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║
+ ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║
+ ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
+ ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
+`
 
 // --- DATA MODELS ---
 
@@ -112,7 +128,10 @@ type Model struct {
 
 func InitialModel(path string, cfg *config.Config) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Filter..."
+	ti.Placeholder = "filter_target..."
+	ti.Prompt = "[>] "
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(bloodRed)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(whiteText)
 	ti.CharLimit = 156
 	ti.Width = 30
 
@@ -334,7 +353,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.WindowW, m.WindowH = msg.Width, msg.Height
 		sidebarStyle = sidebarStyle.Height(msg.Height - 4)
-		mainStyle = mainStyle.Width(msg.Width - 30).Height(msg.Height - 4)
+		mainStyle = mainStyle.Width(msg.Width - 35).Height(msg.Height - 4)
 
 	case RepoMsg:
 		m.RepoData = RepoInfo(msg)
@@ -425,26 +444,30 @@ func (m *Model) updateFilteredLists() {
 // --- VIEW ---
 
 func (m Model) View() string {
-	if m.Err != nil { return fmt.Sprintf("Error: %v", m.Err) }
+	if m.Err != nil { return lipgloss.NewStyle().Foreground(bloodRed).Render(fmt.Sprintf("\n [!] FATAL ERROR: %v\n", m.Err)) }
 	if !m.Loaded { 
-		loading := fmt.Sprintf("\n  Loading... (Using %d threads)", runtime.NumCPU())
+		loading := fmt.Sprintf("\n  [+] INITIALIZING... (THREADS: %d)", runtime.NumCPU())
 		if m.ProgressMsg != "" {
-			loading = "\n  " + m.ProgressMsg
+			loading = "\n  [>] " + m.ProgressMsg
 		}
-		return loading
+		return lipgloss.NewStyle().Foreground(bloodRed).Render(loading)
 	}
 
 	var sb strings.Builder
 	
-	sb.WriteString(titleRendered("SENTINEL") + "\n\n")
-	menu := []string{"Overview", "Issues / PRs", "Action Items"}
+	sb.WriteString(titleRendered("S E N T I N E L") + "\n\n")
+	menu := []string{"System Overview", "Remote Targets", "Local Artifacts"}
 	for i, item := range menu {
-		if i == m.SidebarIdx { sb.WriteString(selectedStyle.Render(item) + "\n") } else { sb.WriteString(itemStyle.Render(item) + "\n") }
+		if i == m.SidebarIdx { 
+			sb.WriteString(selectedStyle.Render(item) + "\n") 
+		} else { 
+			sb.WriteString(itemStyle.Render(item) + "\n") 
+		}
 	}
 	
 	sb.WriteString("\n\n")
 	if m.RepoData.Owner != "" {
-		sb.WriteString(itemStyle.Render(fmt.Sprintf("Repo: %s/%s", m.RepoData.Owner, m.RepoData.RepoName)) + "\n")
+		sb.WriteString(itemStyle.Render(fmt.Sprintf("Target: %s/%s", m.RepoData.Owner, m.RepoData.RepoName)) + "\n")
 	}
 	sb.WriteString(itemStyle.Render("Branch: " + m.RepoData.Branch))
 
@@ -453,58 +476,66 @@ func (m Model) View() string {
 
 	switch m.State {
 	case StateOverview:
-		sb.WriteString(titleRendered("Repository Overview") + "\n\n")
-		sb.WriteString(fmt.Sprintf("Path:   %s\n", m.RepoData.Path))
-		sb.WriteString(fmt.Sprintf("Commit: %s\n", m.RepoData.CommitHash))
-		status := "Clean ✨"
-		if !m.RepoData.Clean { status = "Dirty 🚧" }
-		sb.WriteString(fmt.Sprintf("Status: %s\n", status))
-		sb.WriteString(fmt.Sprintf("\nMetrics:\n• %d Local Action Items\n• %d Cached Issues", len(m.RepoData.Todos), len(m.RepoData.Issues)))
+		// Insert Massive ASCII art here
+		sb.WriteString(titleRendered(sentinelAscii) + "\n\n")
+		sb.WriteString(lipgloss.NewStyle().Foreground(bloodRed).Render("[ SYSTEM DIAGNOSTICS ]") + "\n\n")
+		
+		fmtStr := lipgloss.NewStyle().Foreground(dimText).Render("Path:   ") + "%s\n" +
+				  lipgloss.NewStyle().Foreground(dimText).Render("Commit: ") + "%s\n"
+		
+		sb.WriteString(fmt.Sprintf(fmtStr, m.RepoData.Path, m.RepoData.CommitHash))
+		
+		status := lipgloss.NewStyle().Foreground(bloodRed).Render("DIRTY [!] ")
+		if m.RepoData.Clean { status = lipgloss.NewStyle().Foreground(dimText).Render("CLEAN ") }
+		sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("Status: ") + status + "\n")
+		
+		sb.WriteString(fmt.Sprintf("\n[ METRICS ]\n%s %d Local Artifacts\n%s %d Remote Issues\n", bracketStyle.Render("[+]"), len(m.RepoData.Todos), bracketStyle.Render("[+]"), len(m.RepoData.Issues)))
 
 	case StateIssues:
-		header := fmt.Sprintf("Issues & PRs (%d)", len(m.FilteredIssues))
-		if m.Syncing { header += " [Syncing...]" }
+		header := fmt.Sprintf("[ REMOTE TARGETS : %d ]", len(m.FilteredIssues))
+		if m.Syncing { header += " [ SYNCING... ]" }
 		sb.WriteString(titleRendered(header) + "  ")
 		
 		if m.Searching || m.SearchInput.Value() != "" {
 			sb.WriteString(m.SearchInput.View())
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Foreground(subtle).Render("'s' sync • '/' search"))
+			sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("'s' sync • '/' filter"))
 		}
 		sb.WriteString("\n\n")
 
 		if len(m.FilteredIssues) == 0 {
 			if m.RepoData.Owner == "" {
-				sb.WriteString("Could not detect GitHub remote.\nOnly local git analysis available.")
+				sb.WriteString(lipgloss.NewStyle().Foreground(darkRed).Render("[-] Could not detect remote target.\n    Only local file analysis available."))
 			} else {
-				sb.WriteString("No issues found in cache.\nPress 's' to fetch from GitHub (requires GITHUB_TOKEN).")
+				sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("[-] No issues found in cache.\n    Press 's' to pull from remote (requires GITHUB_TOKEN)."))
 			}
 		} else {
 			renderList(&sb, m.ListScroll, m.WindowH-6, len(m.FilteredIssues), func(i int) string {
 				issue := m.FilteredIssues[i]
-				return fmt.Sprintf("#%d %s [%s]", issue.Number, issue.Title, issue.User.Login)
+				return fmt.Sprintf("#%-4d %s %s", issue.Number, issue.Title, lipgloss.NewStyle().Foreground(darkRed).Render("["+issue.User.Login+"]"))
 			})
 		}
 
 	case StateTODOs:
-		header := fmt.Sprintf("Action Items (%d)", len(m.FilteredTodos))
+		header := fmt.Sprintf("[ LOCAL ARTIFACTS : %d ]", len(m.FilteredTodos))
 		sb.WriteString(titleRendered(header) + "  ")
-		if m.Searching || m.SearchInput.Value() != "" { sb.WriteString(m.SearchInput.View()) } else { sb.WriteString(lipgloss.NewStyle().Foreground(subtle).Render("'/' search")) }
+		if m.Searching || m.SearchInput.Value() != "" { sb.WriteString(m.SearchInput.View()) } else { sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("'/' filter")) }
 		sb.WriteString("\n\n")
 
 		if len(m.FilteredTodos) == 0 {
-			sb.WriteString("No items found.")
+			sb.WriteString(lipgloss.NewStyle().Foreground(dimText).Render("[-] No artifacts found."))
 		} else {
 			renderList(&sb, m.ListScroll, m.WindowH-6, len(m.FilteredTodos), func(i int) string {
 				t := m.FilteredTodos[i]
-				return fmt.Sprintf("%s:%d %s", t.File, t.Line, t.Text)
+				location := lipgloss.NewStyle().Foreground(darkRed).Render(fmt.Sprintf("%s:%d", t.File, t.Line))
+				return fmt.Sprintf("%s %s", location, t.Text)
 			})
 		}
 	}
 
-	mainStyle = mainStyle.Width(m.WindowW - 30)
+	mainStyle = mainStyle.Width(m.WindowW - 35)
 	right := mainStyle.Render(sb.String())
-	help := lipgloss.NewStyle().Foreground(subtle).Render("\n  ↑/↓: navigate • tab: switch mode • /: search • s: sync • q: quit")
+	help := lipgloss.NewStyle().Foreground(darkRed).Render("\n  [ ↑/↓: nav ]  [ tab: mode ]  [ /: filter ]  [ s: sync ]  [ q: exit ]")
 	return docStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, right) + help)
 }
 
@@ -514,10 +545,10 @@ func renderList(sb *strings.Builder, start, height, total int, renderer func(int
 	if end > total { end = total }
 	
 	for i := start; i < end; i++ {
-		sb.WriteString(fmt.Sprintf("• %s\n", renderer(i)))
+		sb.WriteString(fmt.Sprintf("%s %s\n", bracketStyle.Render("[+]"), renderer(i)))
 	}
 	if total > height {
 		pct := int((float64(start) / float64(total)) * 100)
-		sb.WriteString(fmt.Sprintf("\n[Scroll: %d%%]", pct))
+		sb.WriteString(lipgloss.NewStyle().Foreground(darkRed).Render(fmt.Sprintf("\n[ %d%% ]", pct)))
 	}
 }
